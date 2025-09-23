@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
+// Load environment variables first
 dotenv.config();
 
 /**
@@ -15,6 +16,12 @@ dotenv.config();
 // Ensure Smythos vault exists for production environment
 const ensureSmythVault = () => {
     const vaultPath = process.env.SMYTH_VAULT_PATH || path.join(process.env.HOME || process.cwd(), '.smyth', '.sre', 'vault.json');
+    
+    console.log('🔍 Checking Smythos vault at:', vaultPath);
+    console.log('🔑 Environment variables available:');
+    console.log('  PINECONE_API_KEY:', process.env.PINECONE_API_KEY ? 'Set' : 'Missing');
+    console.log('  GOOGLE_AI_API_KEY:', process.env.GOOGLE_AI_API_KEY ? 'Set' : 'Missing');
+    console.log('  googleai:', process.env.googleai ? 'Set' : 'Missing');
     
     if (!fs.existsSync(vaultPath)) {
         console.log('🔧 Creating Smythos vault configuration...');
@@ -27,7 +34,7 @@ const ensureSmythVault = () => {
                 echo: "",
                 openai: process.env.OPENAI_API_KEY || "",
                 anthropic: process.env.ANTHROPIC_API_KEY || "",
-                googleai: process.env.GOOGLE_API_KEY || process.env.GOOGLEAI_API_KEY || "",
+                googleai: process.env.GOOGLE_AI_API_KEY || process.env.googleai || "",
                 groq: process.env.GROQ_API_KEY || "",
                 togetherai: process.env.TOGETHER_API_KEY || "",
                 xai: process.env.XAI_API_KEY || "",
@@ -39,6 +46,40 @@ const ensureSmythVault = () => {
         
         fs.writeFileSync(vaultPath, JSON.stringify(vaultConfig, null, 2));
         console.log('✅ Smythos vault created at:', vaultPath);
+        console.log('📝 Configured keys:', Object.entries(vaultConfig.default)
+            .filter(([key, value]) => value !== "")
+            .map(([key]) => key)
+        );
+    } else {
+        // Update existing vault with environment variables
+        console.log('🔄 Updating existing vault with environment variables...');
+        try {
+            const existingVault = JSON.parse(fs.readFileSync(vaultPath, 'utf8'));
+            const updatedVault = {
+                ...existingVault,
+                default: {
+                    ...existingVault.default,
+                    openai: process.env.OPENAI_API_KEY || existingVault.default?.openai || "",
+                    anthropic: process.env.ANTHROPIC_API_KEY || existingVault.default?.anthropic || "",
+                    googleai: process.env.GOOGLE_AI_API_KEY || process.env.googleai || existingVault.default?.googleai || "",
+                    groq: process.env.GROQ_API_KEY || existingVault.default?.groq || "",
+                    togetherai: process.env.TOGETHER_API_KEY || existingVault.default?.togetherai || "",
+                    xai: process.env.XAI_API_KEY || existingVault.default?.xai || "",
+                    deepseek: process.env.DEEPSEEK_API_KEY || existingVault.default?.deepseek || "",
+                    tavily: process.env.TAVILY_API_KEY || existingVault.default?.tavily || "",
+                    scrapfly: process.env.SCRAPFLY_API_KEY || existingVault.default?.scrapfly || ""
+                }
+            };
+            
+            fs.writeFileSync(vaultPath, JSON.stringify(updatedVault, null, 2));
+            console.log('✅ Vault updated with environment variables');
+            console.log('📝 Active keys:', Object.entries(updatedVault.default)
+                .filter(([key, value]) => value !== "")
+                .map(([key]) => key)
+            );
+        } catch (error) {
+            console.error('❌ Failed to update vault:', error);
+        }
     }
 };
 
