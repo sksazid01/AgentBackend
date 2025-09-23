@@ -89,21 +89,29 @@ ensureSmythVault();
 const __dirname = process.cwd();
 const BOOKS_NAMESPACE = 'books';
 
+// Debug: Log critical environment variables
+console.log('🔧 Critical Environment Variables Check:');
+console.log('  PINECONE_API_KEY:', process.env.PINECONE_API_KEY ? 'Set ✓' : 'Missing ❌');
+console.log('  GOOGLE_AI_API_KEY:', process.env.GOOGLE_AI_API_KEY ? 'Set ✓' : 'Missing ❌');
+console.log('  googleai fallback:', process.env.googleai ? 'Set ✓' : 'Missing ❌');
+
 // Global skill execution gate - prevents repeated tool calls per user input
 class SkillExecutionGate {
     private executedSkills = new Set<string>();
     private currentInputId = '';
+    private skillResults = new Map<string, string>();
     
     startNewInput(inputId: string) {
         this.currentInputId = inputId;
         this.executedSkills.clear();
+        this.skillResults.clear();
         console.log(`[GATE] New input session: ${inputId}`);
     }
     
     canExecute(skillName: string): boolean {
         const key = `${this.currentInputId}:${skillName}`;
         if (this.executedSkills.has(key)) {
-            console.log(`[GATE] Blocking repeated execution of ${skillName}`);
+            console.log(`[GATE] Blocking repeated execution of ${skillName} - already executed in this session`);
             return false;
         }
         this.executedSkills.add(key);
@@ -111,9 +119,24 @@ class SkillExecutionGate {
         return true;
     }
     
+    markCompleted(skillName: string, result: string) {
+        const key = `${this.currentInputId}:${skillName}`;
+        this.skillResults.set(key, result);
+        console.log(`[GATE] Skill ${skillName} completed with result`);
+    }
+    
     isAlreadyExecuted(skillName: string): boolean {
         const key = `${this.currentInputId}:${skillName}`;
         return this.executedSkills.has(key);
+    }
+    
+    getBlockedMessage(skillName: string): string {
+        const key = `${this.currentInputId}:${skillName}`;
+        const result = this.skillResults.get(key);
+        if (result) {
+            return `✅ TASK ALREADY COMPLETED: ${result}`;
+        }
+        return `✅ TASK ALREADY COMPLETED: The ${skillName} operation has already been successfully executed in this session. No further action is needed.`;
     }
 }
 
@@ -136,22 +159,30 @@ const agent = new Agent({
     model: 'gemini-2.0-flash',
 
     //the behavior of the agent, this describes the personnality and behavior of the agent
-    behavior: `You are a helpful book assistant. 
+    behavior: `You are a helpful document assistant. 
 
-When the user asks to delete books or PDFs:
-1. Call the purge_books skill ONCE
-2. When you get a response from the skill, tell the user the result
-3. DO NOT call purge_books again - one call per request
+CRITICAL EXECUTION RULES:
+1. Call each skill EXACTLY ONCE per user request
+2. After calling a skill and receiving ANY response, IMMEDIATELY respond to the user with the result
+3. DO NOT attempt to call the same skill again or any other skills after getting ANY response
+4. If you receive a "TASK COMPLETE" or "TASK ALREADY COMPLETED" message, your job is FINISHED - respond to the user immediately
+5. If you receive any blocking or already executed message, tell the user it was completed and STOP
 
-When any skill returns a success message, respond to the user immediately.
+WORKFLOW:
+- For indexing requests: Call index_document ONCE → Get ANY response → Tell user the result → STOP IMMEDIATELY
+- For search requests: Call lookup_document ONCE → Get ANY response → Tell user the result → STOP IMMEDIATELY  
+- For delete requests: Call purge_documents ONCE → Get ANY response → Tell user the result → STOP IMMEDIATELY
+- For info requests: Call get_document_info ONCE → Get ANY response → Tell user the result → STOP IMMEDIATELY
+
+CRITICAL: After receiving ANY skill response (success, error, or blocked), you MUST immediately provide a final response to the user and stop processing. Never attempt additional skill calls or actions.
 
 Available skills:
-- index_book: Index a PDF book 
-- lookup_book: Search in books
-- purge_books: Delete all books (call once only)
-- get_book_info: Get book information
+- index_document: Index a PDF document 
+- lookup_document: Search in documents
+- purge_documents: Delete all documents  
+- get_document_info: Get document information
 
-Be helpful and concise.`,
+Be concise and direct. Complete your response immediately after receiving ANY skill result.`,
 });
 
 //We create a Pinecone vectorDB instance, at the agent scope
@@ -159,7 +190,9 @@ Be helpful and concise.`,
 const pinecone = agent.vectorDB.Pinecone(BOOKS_NAMESPACE, {
     indexName: 'ilts',
     apiKey: process.env.PINECONE_API_KEY,
-    embeddings: Model.GoogleAI('gemini-embedding-001'),
+    embeddings: Model.GoogleAI('gemini-embedding-001', { 
+        apiKey: process.env.GOOGLE_AI_API_KEY || process.env.googleai 
+    }),
 });
 
 //#endregion
@@ -173,7 +206,9 @@ agent.addSkill({
     process: async ({ document_path }) => {
         // Check execution gate
         if (!skillGate.canExecute('index_document')) {
-            return 'The document indexing has already been completed in this session.';
+            const blockedMsg = skillGate.getBlockedMessage('index_document');
+            console.log(`[GATE] Returning blocked message: ${blockedMsg}`);
+            return blockedMsg;
         }
         
         try {
@@ -195,6 +230,7 @@ agent.addSkill({
             if (!fs.existsSync(filePath)) {
                 const errorMsg = `File resolved path to ${filePath} does not exist`;
                 console.log(`[ERROR] ${errorMsg}`);
+                skillGate.markCompleted('index_document', errorMsg);
                 return errorMsg;
             }
 
@@ -213,7 +249,9 @@ agent.addSkill({
                 console.log(`[DEBUG] Pinecone connection successful`);
             } catch (connError) {
                 console.log(`[ERROR] Pinecone connection failed:`, connError.message);
-                return `Pinecone connection failed: ${connError.message}`;
+                const errorMsg = `Pinecone connection failed: ${connError.message}`;
+                skillGate.markCompleted('index_document', errorMsg);
+                return errorMsg;
             }
             
             const result = await pinecone.insertDoc(name, parsedDoc, { 
@@ -224,24 +262,22 @@ agent.addSkill({
             console.log(`[DEBUG] Insert result:`, result);
 
             if (result) {
-                const successMsg = `✅ SUCCESS: Document ${name} indexed successfully in Pinecone. Task completed. Do not call this skill again.`;
+                const successMsg = `✅ TASK COMPLETE: Document ${name} has been successfully indexed in the vector database. The indexing operation is finished. Do not perform any additional actions.`;
                 console.log(`[SUCCESS] ${successMsg}`);
-                
-                // Verify the insertion by searching
-                console.log(`[DEBUG] Verifying insertion by searching...`);
-                const verifyResult = await pinecone.search('test', { topK: 1 });
-                console.log(`[DEBUG] Verification search result:`, verifyResult);
+                skillGate.markCompleted('index_document', successMsg);
                 
                 return successMsg;
             } else {
                 const failMsg = `❌ Document ${name} indexing failed - no result returned`;
                 console.log(`[ERROR] ${failMsg}`);
+                skillGate.markCompleted('index_document', failMsg);
                 return failMsg;
             }
         } catch (error) {
             const errorMsg = `❌ Error indexing document: ${error.message}`;
             console.error(`[ERROR] ${errorMsg}`, error);
             console.error(`[ERROR] Stack trace:`, error.stack);
+            skillGate.markCompleted('index_document', errorMsg);
             return errorMsg;
         }
     },
@@ -254,7 +290,9 @@ agent.addSkill({
     process: async ({ user_query }) => {
         // Check execution gate
         if (!skillGate.canExecute('lookup_document')) {
-            return 'The document lookup has already been completed in this session.';
+            const blockedMsg = skillGate.getBlockedMessage('lookup_document');
+            console.log(`[GATE] Returning blocked message: ${blockedMsg}`);
+            return blockedMsg;
         }
         
         try {
@@ -267,7 +305,9 @@ agent.addSkill({
             console.log(`[DEBUG] Search completed. Found ${result?.length || 0} results`);
             
             if (!result || result.length === 0) {
-                return "❌ No relevant content found in the indexed documents. Please make sure documents are indexed first using the 'index_document' skill.";
+                const noResultMsg = "❌ No relevant content found in the indexed documents. Please make sure documents are indexed first using the 'index_document' skill.";
+                skillGate.markCompleted('lookup_document', noResultMsg);
+                return noResultMsg;
             }
             
             // Simple approach - just return the first result's text
@@ -277,14 +317,16 @@ agent.addSkill({
             
             console.log(`[DEBUG] Extracted text length:`, text.length);
             
-            const response = `✅ SUCCESS: Found content from ${source}:\n\n${text}\n\nSearch completed. Do not call this skill again.`;
+            const response = `✅ SEARCH COMPLETE: Found relevant content from ${source}:\n\n${text}\n\nThe search operation is finished. Do not perform any additional actions.`;
             console.log(`[DEBUG] Returning response successfully`);
+            skillGate.markCompleted('lookup_document', response);
             
             return response;
             
         } catch (error) {
             const errorMsg = `❌ Error searching documents: ${error.message}`;
             console.error(`[ERROR] ${errorMsg}`, error);
+            skillGate.markCompleted('lookup_document', errorMsg);
             return errorMsg;
         }
     },
@@ -321,13 +363,16 @@ const purgeSkill = agent.addSkill({
         
         // Check execution gate
         if (!skillGate.canExecute('purge_documents')) {
-            return 'The database purge has already been completed in this session.';
+            const blockedMsg = skillGate.getBlockedMessage('purge_documents');
+            console.log(`[GATE] Returning blocked message: ${blockedMsg}`);
+            return blockedMsg;
         }
         
         // Simple check - if already executed, return success immediately
         if (purgeExecuted) {
             const msg = `All PDF documents have already been deleted from the database. The operation was completed successfully.`;
             console.log(`[INFO] ${msg}`);
+            skillGate.markCompleted('purge_documents', msg);
             return msg;
         }
         
@@ -342,13 +387,16 @@ const purgeSkill = agent.addSkill({
             // Mark as executed
             purgeExecuted = true;
             
-            const successMsg = `All PDF documents have been successfully deleted from the vector database. The database is now empty and the operation is complete. (Purged namespaces: ${purged.length}) Do not call this skill again.`;
+            const successMsg = `✅ DELETION COMPLETE: All PDF documents have been successfully removed from the vector database. The database is now empty. (Purged ${purged.length} namespaces) Do not perform any additional actions.`;
             console.log(`[SUCCESS] ${successMsg}`);
+            skillGate.markCompleted('purge_documents', successMsg);
             return successMsg;
             
         } catch (error) {
             console.error(`[ERROR] Purge operation failed:`, error.message);
-            return `Failed to delete documents: ${error.message}`;
+            const errorMsg = `Failed to delete documents: ${error.message}`;
+            skillGate.markCompleted('purge_documents', errorMsg);
+            return errorMsg;
         }
     },
 });
@@ -366,12 +414,26 @@ const openlibraryLookupSkill = agent.addSkill({
     name: 'get_document_info',
     description: 'Use this skill to get information about a document/book',
     process: async ({ document_name }) => {
-        const url = `https://openlibrary.org/search.json?q=${document_name}`;
-
-        const response = await fetch(url);
-        const data = await response.json();
-
-        return data.docs[0];
+        // Check execution gate
+        if (!skillGate.canExecute('get_document_info')) {
+            const blockedMsg = skillGate.getBlockedMessage('get_document_info');
+            console.log(`[GATE] Returning blocked message: ${blockedMsg}`);
+            return blockedMsg;
+        }
+        
+        try {
+            const url = `https://openlibrary.org/search.json?q=${document_name}`;
+            const response = await fetch(url);
+            const data = await response.json();
+            const result = data.docs[0];
+            
+            skillGate.markCompleted('get_document_info', JSON.stringify(result));
+            return result;
+        } catch (error) {
+            const errorMsg = `Error fetching document info: ${error.message}`;
+            skillGate.markCompleted('get_document_info', errorMsg);
+            return errorMsg;
+        }
     },
 });
 
