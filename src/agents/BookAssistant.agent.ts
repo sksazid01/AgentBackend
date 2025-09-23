@@ -173,6 +173,7 @@ WORKFLOW:
 - For search requests: Call lookup_document ONCE → Get ANY response → Tell user the result → STOP IMMEDIATELY  
 - For delete requests: Call purge_documents ONCE → Get ANY response → Tell user the result → STOP IMMEDIATELY
 - For info requests: Call get_document_info ONCE → Get ANY response → Tell user the result → STOP IMMEDIATELY
+- For listing requests: Call list_documents ONCE → Get ANY response → Tell user the result → STOP IMMEDIATELY
 
 CRITICAL: After receiving ANY skill response (success, error, or blocked), you MUST immediately provide a final response to the user and stop processing. Never attempt additional skill calls or actions.
 
@@ -181,6 +182,7 @@ Available skills:
 - lookup_document: Search in documents
 - purge_documents: Delete all documents  
 - get_document_info: Get document information
+- list_documents: List all documents and their indexing status
 
 Be concise and direct. Complete your response immediately after receiving ANY skill result.`,
 });
@@ -451,6 +453,167 @@ openlibraryLookupSkill.in({
         description: 'This need to be a name of a document/book, extract it from the user query',
     },
 });
+
+//List all documents in data directory and show indexing status
+const listDocumentsSkill = agent.addSkill({
+    name: 'list_documents',
+    description: 'Use this skill to get a list of all PDF documents in the data directory and their indexing status in the vector database.',
+    process: async () => {
+        // Check execution gate
+        if (!skillGate.canExecute('list_documents')) {
+            const blockedMsg = skillGate.getBlockedMessage('list_documents');
+            console.log(`[GATE] Returning blocked message: ${blockedMsg}`);
+            return blockedMsg;
+        }
+        
+        try {
+            const result = {
+                dataDirectory: [],
+                indexed: [],
+                notIndexed: [],
+                summary: ''
+            };
+            
+            // 1. List files in data directory
+            const dataPath = path.resolve(__dirname, 'data');
+            console.log(`[DEBUG] Checking data directory: ${dataPath}`);
+            
+            if (!fs.existsSync(dataPath)) {
+                const errorMsg = `❌ Data directory does not exist: ${dataPath}`;
+                console.log(`[ERROR] ${errorMsg}`);
+                skillGate.markCompleted('list_documents', errorMsg);
+                return errorMsg;
+            }
+            
+            // Read all files in the data directory
+            const allFiles = fs.readdirSync(dataPath);
+            const pdfFiles = allFiles.filter(file => file.toLowerCase().endsWith('.pdf'));
+            
+            console.log(`[DEBUG] Found ${pdfFiles.length} PDF files in data directory`);
+            
+            if (pdfFiles.length === 0) {
+                const noFilesMsg = `📁 No PDF documents found in the data directory`;
+                console.log(`[INFO] ${noFilesMsg}`);
+                skillGate.markCompleted('list_documents', noFilesMsg);
+                return noFilesMsg;
+            }
+            
+            // Get file details for each PDF
+            for (const file of pdfFiles) {
+                const filePath = path.join(dataPath, file);
+                const stats = fs.statSync(filePath);
+                
+                result.dataDirectory.push({
+                    name: file,
+                    path: `data/${file}`,
+                    size: stats.size,
+                    sizeFormatted: formatFileSize(stats.size),
+                    modified: stats.mtime.toISOString(),
+                    modifiedFormatted: stats.mtime.toLocaleDateString()
+                });
+            }
+            
+            // 2. Check which documents are indexed in Pinecone
+            const indexedDocuments = new Set();
+            
+            try {
+                const apiKey = process.env.PINECONE_API_KEY;
+                const indexName = 'ilts';
+                
+                if (apiKey) {
+                    const client = new Pinecone({ apiKey });
+                    const index = client.Index(indexName);
+                    
+                    // Get index stats to see what namespaces exist
+                    const stats = await index.describeIndexStats();
+                    const namespaces = Object.keys((stats as any)?.namespaces || {});
+                    
+                    console.log(`[DEBUG] Found namespaces in Pinecone:`, namespaces);
+                    
+                    // For each namespace, try to get sample vectors to see what documents are indexed
+                    for (const ns of namespaces) {
+                        try {
+                            // Query to get documents in this namespace
+                            const searchResult = await index.namespace(ns).query({
+                                vector: new Array(768).fill(0), // Dummy vector for gemini-embedding-001
+                                topK: 100,
+                                includeMetadata: true
+                            });
+                            
+                            if (searchResult.matches) {
+                                searchResult.matches.forEach(match => {
+                                    const fileName = match.metadata?.fileName;
+                                    if (fileName) {
+                                        indexedDocuments.add(fileName);
+                                    }
+                                });
+                            }
+                        } catch (nsError) {
+                            console.log(`[WARN] Could not query namespace ${ns}:`, nsError.message);
+                        }
+                    }
+                } else {
+                    console.log(`[WARN] No Pinecone API key available - cannot check indexing status`);
+                }
+            } catch (dbError) {
+                console.log(`[WARN] Could not access vector database:`, dbError.message);
+            }
+            
+            // 3. Categorize documents by indexing status
+            result.dataDirectory.forEach(doc => {
+                if (indexedDocuments.has(doc.name)) {
+                    result.indexed.push({
+                        ...doc,
+                        status: '✅ Indexed'
+                    });
+                } else {
+                    result.notIndexed.push({
+                        ...doc,
+                        status: '❌ Not Indexed'
+                    });
+                }
+            });
+            
+            // 4. Create summary
+            const totalFiles = result.dataDirectory.length;
+            const indexedCount = result.indexed.length;
+            const notIndexedCount = result.notIndexed.length;
+            const totalSize = result.dataDirectory.reduce((sum, doc) => sum + doc.size, 0);
+            
+            result.summary = `📊 DOCUMENT INVENTORY:\n` +
+                           `📁 Total PDF files: ${totalFiles}\n` +
+                           `✅ Indexed documents: ${indexedCount}\n` +
+                           `❌ Not indexed: ${notIndexedCount}\n` +
+                           `📏 Total size: ${formatFileSize(totalSize)}\n\n` +
+                           `📚 INDEXED DOCUMENTS:\n${result.indexed.map(doc => `  • ${doc.name} (${doc.sizeFormatted})`).join('\n') || '  None'}\n\n` +
+                           `📋 NOT INDEXED DOCUMENTS:\n${result.notIndexed.map(doc => `  • ${doc.name} (${doc.sizeFormatted})`).join('\n') || '  None'}`;
+            
+            const successMsg = `✅ DOCUMENT LIST COMPLETE:\n\n${result.summary}\n\nThe document listing operation is finished. Use 'index_document' skill to index any missing documents.`;
+            console.log(`[SUCCESS] Document list completed`);
+            skillGate.markCompleted('list_documents', successMsg);
+            
+            return {
+                ...result,
+                message: successMsg
+            };
+            
+        } catch (error) {
+            const errorMsg = `❌ Error listing documents: ${error.message}`;
+            console.error(`[ERROR] ${errorMsg}`, error);
+            skillGate.markCompleted('list_documents', errorMsg);
+            return errorMsg;
+        }
+    },
+});
+
+// Helper function to format file sizes
+function formatFileSize(bytes: number): string {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
 
 //#endregion
 
