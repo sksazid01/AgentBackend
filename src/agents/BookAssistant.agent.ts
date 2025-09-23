@@ -200,9 +200,9 @@ const pinecone = agent.vectorDB.Pinecone(BOOKS_NAMESPACE, {
 //#region [ Skills ] ===================================
 
 //Index a document in Pinecone vector database
-agent.addSkill({
+const indexDocumentSkill = agent.addSkill({
     name: 'index_document',
-    description: 'Use this skill to index a document in a vector database. The user will provide the path to the document (e.g., "data/bitcoin.pdf" or "agentbackend/data/bitcoin.pdf")',
+    description: 'Use this skill to index a document in a vector database. The user can provide just the filename (e.g., "bitcoin.pdf") and it will automatically look in the data directory.',
     process: async ({ document_path }) => {
         // Check execution gate
         if (!skillGate.canExecute('index_document')) {
@@ -212,16 +212,23 @@ agent.addSkill({
         }
         
         try {
-            console.log(`[DEBUG] Attempting to index document: ${document_path}`);
+            // Auto-prepend 'data/' if the path doesn't already include it and isn't absolute
+            let processedPath = document_path;
+            if (!path.isAbsolute(document_path) && !document_path.startsWith('data/') && !document_path.includes('/')) {
+                processedPath = `data/${document_path}`;
+                console.log(`[DEBUG] Auto-prepended 'data/' to filename: ${processedPath}`);
+            }
+            
+            console.log(`[DEBUG] Attempting to index document: ${processedPath}`);
             console.log(`[DEBUG] Using index name: ilts`);
             
             // Handle both relative and absolute paths, and clean up duplicated directory names
             let filePath;
-            if (path.isAbsolute(document_path)) {
-                filePath = document_path;
+            if (path.isAbsolute(processedPath)) {
+                filePath = processedPath;
             } else {
                 // Remove leading 'agentbackend/' if present since we're already in that directory
-                const cleanPath = document_path.replace(/^agentbackend\//, '');
+                const cleanPath = processedPath.replace(/^agentbackend\//, '');
                 filePath = path.resolve(__dirname, cleanPath);
             }
             
@@ -280,6 +287,13 @@ agent.addSkill({
             skillGate.markCompleted('index_document', errorMsg);
             return errorMsg;
         }
+    },
+});
+
+// Add input description for index_document skill
+indexDocumentSkill.in({
+    document_path: {
+        description: 'Name of the document file (e.g., "bitcoin.pdf"). The system will automatically look in the data directory. You can also provide full paths like "data/bitcoin.pdf"',
     },
 });
 
