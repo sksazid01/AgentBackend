@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: agentbackend
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:api
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        fromService:
+          type: web
+          name: agentbackend
+          property: port
+    autoDeploy: true
