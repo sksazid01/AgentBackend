@@ -382,14 +382,6 @@ const purgeSkill = agent.addSkill({
             return blockedMsg;
         }
         
-        // Simple check - if already executed, return success immediately
-        if (purgeExecuted) {
-            const msg = `All PDF documents have already been deleted from the database. The operation was completed successfully.`;
-            console.log(`[INFO] ${msg}`);
-            skillGate.markCompleted('purge_documents', msg);
-            return msg;
-        }
-        
         try {
             console.log(`[DEBUG] Executing Pinecone purge operation (SDK-scoped namespace)...`);
             await pinecone.purge();
@@ -398,10 +390,10 @@ const purgeSkill = agent.addSkill({
             const { purged } = await purgeAllNamespacesDirect();
             console.log(`[DEBUG] Purged namespaces:`, purged);
             
-            // Mark as executed
+            // Mark as executed for this session
             purgeExecuted = true;
             
-            const successMsg = `✅ DELETION COMPLETE: All PDF documents have been successfully removed from the vector database. The database is now empty. (Purged ${purged.length} namespaces) Do not perform any additional actions.`;
+            const successMsg = `✅ DELETION COMPLETE: All PDF documents have been successfully removed from the vector database. The database is now empty. (Purged ${purged.length} namespaces: ${purged.join(', ')}) Do not perform any additional actions.`;
             console.log(`[SUCCESS] ${successMsg}`);
             skillGate.markCompleted('purge_documents', successMsg);
             return successMsg;
