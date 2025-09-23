@@ -166,27 +166,27 @@ const pinecone = agent.vectorDB.Pinecone(BOOKS_NAMESPACE, {
 
 //#region [ Skills ] ===================================
 
-//Index a book in Pinecone vector database
+//Index a document in Pinecone vector database
 agent.addSkill({
-    name: 'index_book',
-    description: 'Use this skill to index a book in a vector database. The user will provide the path to the book (e.g., "data/bitcoin.pdf" or "agentbackend/data/bitcoin.pdf")',
-    process: async ({ book_path }) => {
+    name: 'index_document',
+    description: 'Use this skill to index a document in a vector database. The user will provide the path to the document (e.g., "data/bitcoin.pdf" or "agentbackend/data/bitcoin.pdf")',
+    process: async ({ document_path }) => {
         // Check execution gate
-        if (!skillGate.canExecute('index_book')) {
-            return 'The book indexing has already been completed in this session.';
+        if (!skillGate.canExecute('index_document')) {
+            return 'The document indexing has already been completed in this session.';
         }
         
         try {
-            console.log(`[DEBUG] Attempting to index book: ${book_path}`);
+            console.log(`[DEBUG] Attempting to index document: ${document_path}`);
             console.log(`[DEBUG] Using index name: ilts`);
             
             // Handle both relative and absolute paths, and clean up duplicated directory names
             let filePath;
-            if (path.isAbsolute(book_path)) {
-                filePath = book_path;
+            if (path.isAbsolute(document_path)) {
+                filePath = document_path;
             } else {
                 // Remove leading 'agentbackend/' if present since we're already in that directory
-                const cleanPath = book_path.replace(/^agentbackend\//, '');
+                const cleanPath = document_path.replace(/^agentbackend\//, '');
                 filePath = path.resolve(__dirname, cleanPath);
             }
             
@@ -224,7 +224,7 @@ agent.addSkill({
             console.log(`[DEBUG] Insert result:`, result);
 
             if (result) {
-                const successMsg = `✅ SUCCESS: Book ${name} indexed successfully in Pinecone. Task completed. Do not call this skill again.`;
+                const successMsg = `✅ SUCCESS: Document ${name} indexed successfully in Pinecone. Task completed. Do not call this skill again.`;
                 console.log(`[SUCCESS] ${successMsg}`);
                 
                 // Verify the insertion by searching
@@ -234,12 +234,12 @@ agent.addSkill({
                 
                 return successMsg;
             } else {
-                const failMsg = `❌ Book ${name} indexing failed - no result returned`;
+                const failMsg = `❌ Document ${name} indexing failed - no result returned`;
                 console.log(`[ERROR] ${failMsg}`);
                 return failMsg;
             }
         } catch (error) {
-            const errorMsg = `❌ Error indexing book: ${error.message}`;
+            const errorMsg = `❌ Error indexing document: ${error.message}`;
             console.error(`[ERROR] ${errorMsg}`, error);
             console.error(`[ERROR] Stack trace:`, error.stack);
             return errorMsg;
@@ -247,14 +247,14 @@ agent.addSkill({
     },
 });
 
-//Lookup a book in Pinecone vector database
+//Lookup a document in Pinecone vector database
 agent.addSkill({
-    name: 'lookup_book',
+    name: 'lookup_document',
     description: 'Use this skill ONCE to lookup content in the Pinecone vector database. Do not call this skill multiple times for the same query.',
     process: async ({ user_query }) => {
         // Check execution gate
-        if (!skillGate.canExecute('lookup_book')) {
-            return 'The book lookup has already been completed in this session.';
+        if (!skillGate.canExecute('lookup_document')) {
+            return 'The document lookup has already been completed in this session.';
         }
         
         try {
@@ -267,13 +267,13 @@ agent.addSkill({
             console.log(`[DEBUG] Search completed. Found ${result?.length || 0} results`);
             
             if (!result || result.length === 0) {
-                return "❌ No relevant content found in the indexed books. Please make sure books are indexed first using the 'index_book' skill.";
+                return "❌ No relevant content found in the indexed documents. Please make sure documents are indexed first using the 'index_document' skill.";
             }
             
             // Simple approach - just return the first result's text
             const firstResult = result[0];
             const text = firstResult.text || firstResult.content || firstResult.pageContent || 'No text found in result';
-            const source = firstResult.metadata?.fileName || firstResult.metadata?.datasourceLabel || 'Bitcoin PDF';
+            const source = firstResult.metadata?.fileName || firstResult.metadata?.datasourceLabel || 'PDF Document';
             
             console.log(`[DEBUG] Extracted text length:`, text.length);
             
@@ -283,7 +283,7 @@ agent.addSkill({
             return response;
             
         } catch (error) {
-            const errorMsg = `❌ Error searching books: ${error.message}`;
+            const errorMsg = `❌ Error searching documents: ${error.message}`;
             console.error(`[ERROR] ${errorMsg}`, error);
             return errorMsg;
         }
@@ -314,19 +314,19 @@ async function purgeAllNamespacesDirect(): Promise<{ purged: string[] }> {
 
 //Purge all data from Pinecone vector database (useful for testing)
 const purgeSkill = agent.addSkill({
-    name: 'purge_books',
-    description: 'Use this skill to remove all indexed books from the vector database. WARNING: This will delete all data! Only call this once per user request.',
+    name: 'purge_documents',
+    description: 'Use this skill to remove all indexed documents from the vector database. WARNING: This will delete all data! Only call this once per user request.',
     process: async (params) => {
         console.log(`[DEBUG] Purge skill called with params:`, params);
         
         // Check execution gate
-        if (!skillGate.canExecute('purge_books')) {
+        if (!skillGate.canExecute('purge_documents')) {
             return 'The database purge has already been completed in this session.';
         }
         
         // Simple check - if already executed, return success immediately
         if (purgeExecuted) {
-            const msg = `All PDF books have already been deleted from the database. The operation was completed successfully.`;
+            const msg = `All PDF documents have already been deleted from the database. The operation was completed successfully.`;
             console.log(`[INFO] ${msg}`);
             return msg;
         }
@@ -342,13 +342,13 @@ const purgeSkill = agent.addSkill({
             // Mark as executed
             purgeExecuted = true;
             
-            const successMsg = `All PDF books have been successfully deleted from the vector database. The database is now empty and the operation is complete. (Purged namespaces: ${purged.length}) Do not call this skill again.`;
+            const successMsg = `All PDF documents have been successfully deleted from the vector database. The database is now empty and the operation is complete. (Purged namespaces: ${purged.length}) Do not call this skill again.`;
             console.log(`[SUCCESS] ${successMsg}`);
             return successMsg;
             
         } catch (error) {
             console.error(`[ERROR] Purge operation failed:`, error.message);
-            return `Failed to delete books: ${error.message}`;
+            return `Failed to delete documents: ${error.message}`;
         }
     },
 });
@@ -356,17 +356,17 @@ const purgeSkill = agent.addSkill({
 // Add explicit input validation to prevent retries
 purgeSkill.in({
     confirmation: {
-        description: 'Set to "yes" to confirm deletion of all books',
+        description: 'Set to "yes" to confirm deletion of all documents',
         optional: true
     }
 });
 
 //Openlibrary lookup : this is a simple skill that uses the openlibrary API to get information about a book
 const openlibraryLookupSkill = agent.addSkill({
-    name: 'get_book_info',
-    description: 'Use this skill to get information about a book',
-    process: async ({ book_name }) => {
-        const url = `https://openlibrary.org/search.json?q=${book_name}`;
+    name: 'get_document_info',
+    description: 'Use this skill to get information about a document/book',
+    process: async ({ document_name }) => {
+        const url = `https://openlibrary.org/search.json?q=${document_name}`;
 
         const response = await fetch(url);
         const data = await response.json();
@@ -375,12 +375,12 @@ const openlibraryLookupSkill = agent.addSkill({
     },
 });
 
-//The skill that we just created requires a book_name input,
+//The skill that we just created requires a document_name input,
 // sometime the agent LLM will need a description or more details about the input in order to use it properly
-//below we add a description to the book_name input in order to tell the LLM how to use it
+//below we add a description to the document_name input in order to tell the LLM how to use it
 openlibraryLookupSkill.in({
-    book_name: {
-        description: 'This need to be a name of a book, extract it from the user query',
+    document_name: {
+        description: 'This need to be a name of a document/book, extract it from the user query',
     },
 });
 

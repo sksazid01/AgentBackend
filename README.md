@@ -1,223 +1,485 @@
-# @smythos/sdk Interactive Chat Example
+# Document Assistant Agent Backend
 
-This project is a demonstration of the capabilities of the [@smythos/sdk](https://www.npmjs.com/package/@smythos/sdk), showcasing how to build and interact with AI agents in a Node.js environment. It features an interactive command-line interface (CLI) that allows you to chat with two different agents: a Book Assistant and a Crypto Assistant.
+A powerful AI-powered document processing and search system built with the Smythos SDK, featuring vector database integration, natural language processing, and RESTful API endpoints.
 
-This project was bootstrapped with [SRE SDK Template](https://github.com/SmythOS/sre-project-templates/tree/interactive-chat-agent-select).
+## 🚀 Features
 
-## Getting Started
+- **Document Indexing**: Upload and index PDF documents using vector embeddings
+- **Semantic Search**: Search through documents using natural language queries
+- **AI Agent Integration**: Powered by Google's Gemini AI for intelligent responses
+- **Vector Database**: Pinecone integration for scalable document storage and retrieval
+- **RESTful API**: Complete API for programmatic access
+- **Chat Interface**: Interactive terminal chat mode
+- **Production Ready**: Deployed on Render with environment configuration
+
+## 📋 Table of Contents
+
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [API Endpoints](#api-endpoints)
+- [Usage Examples](#usage-examples)
+- [Chat Mode](#chat-mode)
+- [Deployment](#deployment)
+- [Environment Variables](#environment-variables)
+- [Development](#development)
+
+## 🛠️ Installation
 
 ### Prerequisites
 
--   [Node.js](https://nodejs.org/) (v20 or higher)
--   An API key for an OpenAI model (e.g., `gpt-4o`).
+- Node.js 18+ 
+- npm or yarn
+- Pinecone account
+- Google AI API key
 
-### Installation
+### Local Setup
 
-1.  Clone the repository:
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/agentbackend.git
+   cd agentbackend
+   ```
 
-    ```bash
-    git clone --branch interactive-chat-agent-select https://github.com/smythos/sre-project-templates.git interactive-chat-agent-select
-    cd interactive-chat-agent-select
-    ```
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-2.  Install the dependencies:
+3. **Configure environment variables**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your API keys
+   ```
 
-    ```bash
-    npm install
-    ```
+4. **Build the project**
+   ```bash
+   npm run build
+   ```
 
-3.  Set up your OpenAI API key:
+5. **Start the server**
+   ```bash
+   # API mode (default)
+   npm run start:api
+   
+   # Chat mode
+   npm run start:chat
+   ```
 
-    The application uses the [@smythos/sdk](https://www.npmjs.com/package/@smythos/sdk) which has a built-in secret management system called Smyth Vault.
-    During development, we can use a simple json file to store vault secrets.
+## ⚙️ Configuration
 
-    Create a file in one of the following locations:
+### Environment Variables
 
-    -   `~/.smyth/.sre/vault.json` (user home directory : recommended)
-    -   `./.smyth/.sre/vault.json` (local project directory)
+Create a `.env` file in the root directory:
 
-    The file should have the following format:
+```env
+# Pinecone Configuration
+PINECONE_API_KEY=your_pinecone_api_key_here
 
+# Google AI Configuration  
+GOOGLE_AI_API_KEY=your_google_ai_api_key_here
+googleai=your_google_ai_api_key_here
+
+# Server Configuration (optional)
+PORT=5000
+NODE_ENV=development
+```
+
+### API Keys Setup
+
+1. **Pinecone**: Get your API key from [Pinecone Console](https://app.pinecone.io/)
+2. **Google AI**: Get your API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+
+## 🔗 API Endpoints
+
+### Base URL
+- **Local**: `http://localhost:5000`
+- **Production**: `https://your-app.render.com`
+
+### Health Check
+```http
+GET /health
+```
+
+**Response:**
 ```json
 {
-    "default": {
-        "echo": "",
-        "openai": "sk-xxxxxx-Your-OpenAI-API-Key",
-        "anthropic": "sk-ant-xxxxxx",
-        "googleai": "xxxxxxx",
-        "groq": "gsk_xxxxxx",
-        "togetherai": "xxxxxx"
-    }
+  "status": "OK",
+  "timestamp": "2025-09-23T07:00:00.000Z"
 }
 ```
 
-for this example code, only the **openai** key is needed.
-
-\_Note: We are are preparing a CLI tool that will help you scaffold Smyth Projects and create/manage the vault.
-
-### Running the Application
-
-1.  Build the project:
-
-    ```bash
-    npm run build
-    ```
-
-2.  Start the interactive chat:
-    ```bash
-    npm start
-    ```
-
-You will be prompted to choose an agent to chat with.
-
-## Example Interactions
-
-### Book Assistant
-
-**Indexing a file:**
-
-```
-You: please index this book ./data/bitcoin.pdf
-
-[Calling Tool] index_book {"0":{"book_path":"./data/bitcoin.pdf"}}
-🤖 Assistant: The book "bitcoin.pdf" has been indexed successfully. If you have any queries or need further assistance, feel free to ask!
+### List Skills
+```http
+GET /api/agent/skills
 ```
 
-**Querying the indexed file:**
-
-```
-You: find the pages that discuss the concept of Proof of work
-
-[Calling Tool] lookup_book {"0":{"user_query":"Proof of work"}}
-🤖 Assistant: The concept of Proof of Work is discussed on multiple pages in the "bitcoin.pdf" document. Here are some excerpts and the corresponding page numbers where this concept is covered:
-
-1. **Page 3**:
-   - "The proof-of-work also solves ...."
-
-2. **Page 8**:
-   - "To solve this, we proposed a peer-to-peer...."
-
-3. **Page 1**:
-   - "Nodes can leave and rejoin the network at will, ...."
-
-These excerpts explain how the Proof of Work mechanism is implemented in the Bitcoin network to ensure the security and integrity of the blockchain. If you have any more questions or need further details, feel free to ask!
-```
-
-**Getting book information from an external API:**
-
-```
-You: Provide me with all the information about the book The black Swan
-
-[Calling Tool] get_book_info {"0":{"book_name":"The Black Swan"}}
-🤖 Assistant: "The Black Swan: The Impact of the Highly Improbable" is a book written by Nassim Nicholas Taleb. Here's some detailed information about the book:
-
-- **Author**: Nassim Nicholas Taleb
-- **Subtitle**: The Impact of the Highly Improbable
-- **First Published**: 2005
-- **Editions**: There are 27 editions of the book.
-- **Languages Available**: The book is available in multiple languages, including English, Portuguese, Japanese, Korean, French, German, Hebrew, and Spanish.
-
-- **Cover Edition Key**: OL17969527M
-- **Cover Image**: ![The Black Swan Cover](https://covers.openlibrary.org/b/id/5721840-L.jpg)
-
-- **Internet Archive (IA) Access**:
-  - The book has several listings on the Internet Archive for borrowing or reading, such as:
-    - [blackswan0000tale](https://archive.org/details/blackswan0000tale)
-    - [blackswanimpacto00tale](https://archive.org/details/blackswanimpacto00tale)
-
-- **Ebook Access**: The book is available in the "printdisabled" category, meaning there are specific access restrictions for the digitally impaired.
-- **IA Collection**: The book can be found in collections such as americana, printdisabled, and various university libraries.
-
-**Summary**:
-"The Black Swan" explores the impact of rare, unpredictable events, termed "black swans," and the human tendency to find simplistic explanations for these events retrospectively. Taleb argues that these events have significant effects on history and markets, emphasizing the limitations of our predictions and the biases that cloud our judgment.
-
-If you seek more specific information or wish to access the book, feel free to let me know!
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "agentId": "document-assistant",
+    "agentName": "Document Assistant", 
+    "skills": [
+      {
+        "name": "index_document",
+        "description": "Index a document in the vector database",
+        "inputs": {
+          "document_path": {
+            "description": "Path to the PDF document file",
+            "required": true
+          }
+        }
+      }
+    ]
+  }
+}
 ```
 
-### Crypto Assistant
+### Execute Individual Skills
 
-**Getting the price of multiple cryptocurrencies:**
+#### 1. Index Document
+```http
+POST /api/agent/skills/index_document
+Content-Type: application/json
 
-```
-You: What is the current price of Bitcoin and TAO ?
-
-[Calling Tool] get_price {"coin_id": "bitcoin"}
-[Calling Tool] get_price {"coin_id": "lamden"}
-🤖 Assistant: The current price of Bitcoin (BTC) is $104,229 USD, and the current price of Lamden (TAO) is $0.00153937 USD.
-```
-
-**Clarifying user intent and searching for the correct coin:**
-
-```
-You: Oh I'm not talking about Lamden TAO, I was referring to Bittensor
-
-[Calling Tool] search_coins {"query":"Bittensor"}
-[Calling Tool] get_price {"coin_id":"bittensor"}
-🤖 Assistant: The current price of Bittensor (TAO) is $348.07 USD.
+{
+  "document_path": "data/bitcoin.pdf"
+}
 ```
 
-### Other Interaction Methods
+#### 2. Search Documents  
+```http
+POST /api/agent/skills/lookup_document
+Content-Type: application/json
 
-The `src/index.ts` file contains commented-out examples of other ways to interact with the agents besides the interactive chat. You can uncomment them to see how to:
+{
+  "user_query": "What is Bitcoin?"
+}
+```
 
--   Call a specific skill directly.
--   Send a single prompt to an agent.
--   Stream the agent's response to a prompt.
+#### 3. Get Document Info
+```http
+POST /api/agent/skills/get_document_info
+Content-Type: application/json
 
-## Features
+{
+  "document_name": "Bitcoin"
+}
+```
 
--   **Interactive Agent Selection**: Choose between two distinct AI agents at startup.
--   **Persistent Chat Sessions**: Chat history is saved and restored, allowing you to continue previous conversations.
--   **Book Assistant**: An agent created programmatically with skills to:
-    -   Index books from local files into an in-memory vector database.
-    -   Search for indexed books based on your queries.
-    -   Fetch book information from the [Open Library API](https://openlibrary.org/developers/api).
--   **Crypto Assistant**: An agent imported from a `.smyth` file (a visual agent configuration from SmythOS Studio) with skills to:
-    -   Search for cryptocurrencies using the [CoinGecko API](https://www.coingecko.com/en/api).
-    -   Get the current price of any cryptocurrency.
-    -   Retrieve detailed market information for specific coins.
--   **Multiple Interaction Models**: Demonstrates different ways to interact with agents, including direct skill calls, prompting, and streaming responses.
+#### 4. Purge All Documents
+```http
+POST /api/agent/skills/purge_documents
+Content-Type: application/json
 
-## How it Works
+{
+  "confirmation": "yes"
+}
+```
 
-### Agents
+### Natural Language Prompt
+```http
+POST /api/agent/prompt
+Content-Type: application/json
 
-The core of this application are the two agents, which are instances of the `Agent` class from the `@smythos/sdk`.
+{
+  "message": "Index the Bitcoin whitepaper and then tell me about its main concepts"
+}
+```
 
-#### Book Assistant
+### Execute Multiple Skills
+```http
+POST /api/agent/skills/execute-all
+Content-Type: application/json
 
-This agent is defined entirely in code in `src/agents/BookAssistant.agent.ts`. It demonstrates how to:
+{
+  "skillsToExecute": [
+    {
+      "skillName": "index_document",
+      "parameters": {
+        "document_path": "data/bitcoin.pdf"
+      }
+    },
+    {
+      "skillName": "lookup_document", 
+      "parameters": {
+        "user_query": "What is the main purpose of Bitcoin?"
+      }
+    }
+  ]
+}
+```
 
--   Create an agent instance.
--   Define its behavior and link it to a language model.
--   Create an in-memory vector database (`RAMVec`) for data storage and retrieval.
--   Add custom skills with programmatic logic (`index_book`, `lookup_book`, `get_book_info`).
+## 📚 Usage Examples
 
-## Project Structure
+### Curl Examples
+
+1. **Health Check**
+   ```bash
+   curl http://localhost:5000/health
+   ```
+
+2. **List Available Skills**
+   ```bash
+   curl http://localhost:5000/api/agent/skills | jq
+   ```
+
+3. **Index a Document**
+   ```bash
+   curl -X POST http://localhost:5000/api/agent/skills/index_document \
+     -H "Content-Type: application/json" \
+     -d '{"document_path": "data/bitcoin.pdf"}' | jq
+   ```
+
+4. **Search Documents**
+   ```bash
+   curl -X POST http://localhost:5000/api/agent/skills/lookup_document \
+     -H "Content-Type: application/json" \
+     -d '{"user_query": "What is Bitcoin?"}' | jq
+   ```
+
+5. **Natural Language Query**
+   ```bash
+   curl -X POST http://localhost:5000/api/agent/prompt \
+     -H "Content-Type: application/json" \
+     -d '{"message": "Search for information about blockchain technology"}' | jq
+   ```
+
+### JavaScript/Node.js Examples
+
+```javascript
+const API_BASE = 'http://localhost:5000';
+
+// Index a document
+async function indexDocument(filePath) {
+  const response = await fetch(`${API_BASE}/api/agent/skills/index_document`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ document_path: filePath })
+  });
+  return response.json();
+}
+
+// Search documents
+async function searchDocuments(query) {
+  const response = await fetch(`${API_BASE}/api/agent/skills/lookup_document`, {
+    method: 'POST', 
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_query: query })
+  });
+  return response.json();
+}
+
+// Usage
+(async () => {
+  // Index document
+  const indexResult = await indexDocument('data/bitcoin.pdf');
+  console.log('Index Result:', indexResult);
+  
+  // Search  
+  const searchResult = await searchDocuments('What is Bitcoin?');
+  console.log('Search Result:', searchResult);
+})();
+```
+
+### Python Examples
+
+```python
+import requests
+import json
+
+API_BASE = 'http://localhost:5000'
+
+def index_document(file_path):
+    response = requests.post(
+        f'{API_BASE}/api/agent/skills/index_document',
+        json={'document_path': file_path}
+    )
+    return response.json()
+
+def search_documents(query):
+    response = requests.post(
+        f'{API_BASE}/api/agent/skills/lookup_document', 
+        json={'user_query': query}
+    )
+    return response.json()
+
+# Usage
+if __name__ == '__main__':
+    # Index document
+    index_result = index_document('data/bitcoin.pdf')
+    print('Index Result:', json.dumps(index_result, indent=2))
+    
+    # Search
+    search_result = search_documents('What is Bitcoin?') 
+    print('Search Result:', json.dumps(search_result, indent=2))
+```
+
+## 💬 Chat Mode
+
+Start interactive chat mode:
+
+```bash
+npm run start:chat
+```
+
+Chat commands:
+- Type natural language queries
+- Use `/help` for available commands
+- Use `/quit` to exit
+
+Example chat session:
+```
+Document Assistant > Index the Bitcoin whitepaper
+✅ Document indexed successfully!
+
+Document Assistant > What is the main purpose of Bitcoin?
+Based on the Bitcoin whitepaper, the main purpose of Bitcoin is to create a purely peer-to-peer version of electronic cash that allows online payments to be sent directly between parties without going through financial institutions...
+```
+
+## 🚀 Deployment
+
+### Render Deployment
+
+This project is configured for deployment on [Render](https://render.com).
+
+1. **Fork/Clone** this repository
+2. **Connect** to Render
+3. **Set Environment Variables** in Render dashboard:
+   - `GOOGLE_AI_API_KEY`
+   - `PINECONE_API_KEY`
+4. **Deploy** using the included `render.yaml`
+
+The `render.yaml` configuration includes:
+- Automatic builds
+- Environment setup
+- Health checks
+- Production optimizations
+
+### Manual Deployment
+
+1. **Build for production**
+   ```bash
+   npm run build
+   ```
+
+2. **Set environment variables**
+   ```bash
+   export GOOGLE_AI_API_KEY=your_key
+   export PINECONE_API_KEY=your_key
+   export NODE_ENV=production
+   ```
+
+3. **Start production server**
+   ```bash
+   npm run start:production
+   ```
+
+## 🔧 Development
+
+### Project Structure
 
 ```
-.
-├── data
-│   └── crypto-assistant.smyth  # SmythOS Studio agent definition
-├── dist
-│   └── ...                     # Compiled JavaScript files
-├── src
-│   ├── agents
-│   │   ├── BookAssistant.agent.ts   # Programmatic agent definition
-│   │   └── CryptoAssistant.agent.ts # Agent imported from .smyth file
-│   ├── utils
-│   │   └── TerminalChat.ts     # Helper for terminal chat UI
-│   └── index.ts                # Main application entry point
+agentbackend/
+├── src/
+│   ├── agents/              # AI agent definitions
+│   │   └── BookAssistant.agent.ts
+│   ├── api/                 # Express API server
+│   │   └── server.ts
+│   ├── utils/               # Utility functions
+│   │   ├── SkillGate.ts
+│   │   └── TerminalChat.ts
+│   └── index.ts             # Main entry point
+├── scripts/                 # Build and deployment scripts
+├── data/                    # Sample documents
+├── dist/                    # Built output
+├── render.yaml              # Render deployment config
 ├── package.json
 └── README.md
 ```
 
-#### Crypto Assistant
+### Available Scripts
 
-This agent is defined in a `.smyth` file (`data/crypto-assistant.smyth`), which is a format used by SmythOS Studio, a visual editor for creating AI agents. The agent is then imported and instantiated in `src/agents/CryptoAssistant.agent.ts`.
+```bash
+# Development
+npm run dev              # Build and start in development
+npm run dev:chat         # Start in chat mode
 
-This demonstrates a low-code approach to agent development, where the agent's skills and API integrations are defined visually and then imported into the code.
+# Production  
+npm run build            # Build TypeScript
+npm run start            # Start API server
+npm run start:api        # Start API server explicitly
+npm run start:chat       # Start chat mode
+npm run start:production # Production server with setup
 
-## License
+# Utilities
+npm run setup:production # Setup production environment
+```
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### Key Technologies
+
+- **Smythos SDK**: AI agent framework
+- **Express.js**: Web server
+- **Pinecone**: Vector database
+- **Google AI**: Language model
+- **TypeScript**: Type safety
+- **Rollup**: Module bundler
+
+## 📖 API Skills Reference
+
+### index_document
+- **Purpose**: Index PDF documents into vector database
+- **Input**: `document_path` (string) - Path to PDF file
+- **Output**: Success/error message with indexing status
+
+### lookup_document  
+- **Purpose**: Search indexed documents using natural language
+- **Input**: `user_query` (string) - Search query
+- **Output**: Relevant document content with source
+
+### get_document_info
+- **Purpose**: Get metadata about documents via OpenLibrary API
+- **Input**: `document_name` (string) - Document/book name
+- **Output**: Document metadata (author, year, etc.)
+
+### purge_documents
+- **Purpose**: Delete all indexed documents from vector database
+- **Input**: `confirmation` (string, optional) - "yes" to confirm
+- **Output**: Confirmation of deletion
+
+## 🔒 Security Notes
+
+- API keys are stored in environment variables
+- No authentication currently implemented (add as needed)
+- CORS enabled for cross-origin requests
+- Input validation on all endpoints
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🆘 Support
+
+For issues and questions:
+- Open an issue on GitHub
+- Check the documentation
+- Review the example code
+
+## 🎯 Roadmap
+
+- [ ] Authentication system
+- [ ] Multiple file format support
+- [ ] Batch document processing
+- [ ] Advanced search filters
+- [ ] Document summarization
+- [ ] Multi-language support
+- [ ] WebSocket for real-time updates

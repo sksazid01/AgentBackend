@@ -21,32 +21,32 @@ app.get('/api/agent/skills', (req, res) => {
         // Manually define the available skills since we can't access them via the SDK
         const skills = [
             {
-                name: 'index_book',
-                description: 'Use this skill to index a book in a vector database. The user will provide the path to the book (e.g., "data/bitcoin.pdf" or "agentbackend/data/bitcoin.pdf")',
-                inputs: { book_path: { description: 'Path to the PDF book file', required: true } }
+                name: 'index_document',
+                description: 'Use this skill to index a document in a vector database. The user will provide the path to the document (e.g., "data/bitcoin.pdf" or "agentbackend/data/bitcoin.pdf")',
+                inputs: { document_path: { description: 'Path to the PDF document file', required: true } }
             },
             {
-                name: 'lookup_book',
+                name: 'lookup_document',
                 description: 'Use this skill ONCE to lookup content in the Pinecone vector database. Do not call this skill multiple times for the same query.',
-                inputs: { user_query: { description: 'The search query to find in books', required: true } }
+                inputs: { user_query: { description: 'The search query to find in documents', required: true } }
             },
             {
-                name: 'purge_books',
-                description: 'Use this skill to remove all indexed books from the vector database. WARNING: This will delete all data! Only call this once per user request.',
-                inputs: { confirmation: { description: 'Set to "yes" to confirm deletion of all books', required: false } }
+                name: 'purge_documents',
+                description: 'Use this skill to remove all indexed documents from the vector database. WARNING: This will delete all data! Only call this once per user request.',
+                inputs: { confirmation: { description: 'Set to "yes" to confirm deletion of all documents', required: false } }
             },
             {
-                name: 'get_book_info',
-                description: 'Use this skill to get information about a book',
-                inputs: { book_name: { description: 'This need to be a name of a book, extract it from the user query', required: true } }
+                name: 'get_document_info',
+                description: 'Use this skill to get information about a document/book',
+                inputs: { document_name: { description: 'This need to be a name of a document/book, extract it from the user query', required: true } }
             }
         ];
         
         res.json({
             success: true,
             data: {
-                agentId: 'book-assistant',
-                agentName: 'Book Assistant',
+                agentId: 'document-assistant',
+                agentName: 'Document Assistant',
                 skills: skills
             }
         });
@@ -196,7 +196,7 @@ export const startServer = () => {
     return new Promise<void>((resolve) => {
         app.listen(PORT, () => {
             console.log(`🚀 API Server running on http://localhost:${PORT}`);
-            console.log(`📚 Book Assistant Agent API is ready!`);
+            console.log(`📚 Document Assistant Agent API is ready!`);
             console.log(`\nAvailable endpoints:`);
             console.log(`  GET  /health - Health check`);
             console.log(`  GET  /api/agent/skills - List all available skills`);

@@ -14,14 +14,14 @@ const main = async () => {
     const mode = args[0] || 'api'; // default to API mode
     
     if (mode === 'chat') {
-        console.log('Starting Book Assistant Chat...');
+        console.log('Starting Document Assistant Chat...');
         
-        //Use the Book Assistant agent
+        //Use the Document Assistant agent
         const agent = BookAssistantAgent;
 
         //Create a chat object from the agent
         //this is used to identify the chat session, using the same ID will load the previous chat session
-        const sessionId = `my-chat-session-book-assistant`;
+        const sessionId = `my-chat-session-document-assistant`;
         const chat = agent.chat({
             id: sessionId,
             persist: true,
@@ -30,16 +30,16 @@ const main = async () => {
         //Run the chat session in the terminal (pass agent for direct skill calls on special intents)
         runChat(chat, agent);
     } else {
-        console.log('Starting Book Assistant API Server...');
+        console.log('Starting Document Assistant API Server...');
         
         // Start the Express API server
         await startServer();
         
-        console.log(`\n📖 Book Assistant is ready to help!`);
+        console.log(`\n📖 Document Assistant is ready to help!`);
         console.log(`\nTo test the API, try these commands:`);
         console.log(`  curl http://localhost:5000/health`);
         console.log(`  curl http://localhost:5000/api/agent/skills`);
-        console.log(`  curl -X POST http://localhost:5000/api/agent/skills/get_book_info -H "Content-Type: application/json" -d '{"book_name": "Bitcoin"}'`);
+        console.log(`  curl -X POST http://localhost:5000/api/agent/skills/get_document_info -H "Content-Type: application/json" -d '{"document_name": "Bitcoin"}'`);
         console.log(`\nTo run in chat mode instead: npm start chat`);
     }
 };
