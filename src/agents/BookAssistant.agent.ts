@@ -12,6 +12,39 @@ dotenv.config();
  *
  */
 
+// Ensure Smythos vault exists for production environment
+const ensureSmythVault = () => {
+    const vaultPath = process.env.SMYTH_VAULT_PATH || path.join(process.env.HOME || process.cwd(), '.smyth', '.sre', 'vault.json');
+    
+    if (!fs.existsSync(vaultPath)) {
+        console.log('🔧 Creating Smythos vault configuration...');
+        
+        const vaultDir = path.dirname(vaultPath);
+        fs.mkdirSync(vaultDir, { recursive: true });
+        
+        const vaultConfig = {
+            default: {
+                echo: "",
+                openai: process.env.OPENAI_API_KEY || "",
+                anthropic: process.env.ANTHROPIC_API_KEY || "",
+                googleai: process.env.GOOGLE_API_KEY || process.env.GOOGLEAI_API_KEY || "",
+                groq: process.env.GROQ_API_KEY || "",
+                togetherai: process.env.TOGETHER_API_KEY || "",
+                xai: process.env.XAI_API_KEY || "",
+                deepseek: process.env.DEEPSEEK_API_KEY || "",
+                tavily: process.env.TAVILY_API_KEY || "",
+                scrapfly: process.env.SCRAPFLY_API_KEY || ""
+            }
+        };
+        
+        fs.writeFileSync(vaultPath, JSON.stringify(vaultConfig, null, 2));
+        console.log('✅ Smythos vault created at:', vaultPath);
+    }
+};
+
+// Initialize vault before creating agent
+ensureSmythVault();
+
 const __dirname = process.cwd();
 const BOOKS_NAMESPACE = 'books';
 

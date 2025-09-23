@@ -7,7 +7,9 @@
     "build": "cross-env BUILD=dev FORMAT=esm rollup -c ./rollup.config.js",
     "start": "npm run build && node dist/index.js",
     "start:chat": "npm run build && node dist/index.js chat",
-    "start:api": "npm run build && node dist/index.js api",
+    "start:api": "npm run setup:production && npm run build && node dist/index.js api",
+    "start:production": "npm run setup:production && npm run build && node dist/index.js api",
+    "setup:production": "node scripts/setup-production.js",
     "dev": "npm run build && node dist/index.js",
     "dev:chat": "npm run build && node dist/index.js chat"
   },
