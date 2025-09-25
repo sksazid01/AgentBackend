@@ -470,6 +470,71 @@ openlibraryLookupSkill.in({
     },
 });
 
+//Send email skill (placeholder implementation)
+const sendEmailSkill = agent.addSkill({
+    name: 'send_email',
+    description: 'Send an email to specified recipients with subject and body content',
+    process: async ({ to, subject = 'No Subject', body = 'No content' }) => {
+        // Check execution gate - return success message for repeated calls
+        if (!skillGate.canExecute('send_email')) {
+            const blockedMsg = skillGate.getBlockedMessage('send_email');
+            console.log(`[GATE] Returning blocked message: ${blockedMsg}`);
+            return blockedMsg;
+        }
+        
+        try {
+            // This is a placeholder implementation
+            // In a real implementation, you would integrate with an email service like:
+            // - SendGrid, Mailgun, AWS SES, etc.
+            // - SMTP server
+            // - Microsoft Graph API for Outlook
+            
+            console.log(`[DEBUG] Email skill called with:`);
+            console.log(`  To: ${to}`);
+            console.log(`  Subject: ${subject}`);
+            console.log(`  Body: ${body}`);
+            
+            // Simulate email sending
+            const emailData = {
+                to: to,
+                subject: subject,
+                body: body,
+                timestamp: new Date().toISOString(),
+                status: 'simulated_sent'
+            };
+            
+            const successMsg = `✅ EMAIL SENT (SIMULATED): Email successfully sent to ${to} with subject "${subject}". This is a demonstration - no actual email was sent. To enable real email sending, integrate with an email service provider.`;
+            console.log(`[SUCCESS] ${successMsg}`);
+            skillGate.markCompleted('send_email', successMsg);
+            
+            return {
+                success: true,
+                data: emailData,
+                message: successMsg
+            };
+            
+        } catch (error) {
+            const errorMsg = `❌ Error sending email: ${error.message}`;
+            console.error(`[ERROR] ${errorMsg}`, error);
+            skillGate.markCompleted('send_email', errorMsg);
+            return errorMsg;
+        }
+    },
+});
+
+// Add input descriptions for send_email skill
+sendEmailSkill.in({
+    to: {
+        description: 'Email recipient address (required)',
+    },
+    subject: {
+        description: 'Email subject line (optional, defaults to "No Subject")',
+    },
+    body: {
+        description: 'Email body content (optional, defaults to "No content")',
+    },
+});
+
 //List all documents in data directory and show indexing status
 const listDocumentsSkill = agent.addSkill({
     name: 'list_documents',
