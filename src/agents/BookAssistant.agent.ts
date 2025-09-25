@@ -211,6 +211,8 @@ const pinecone = agent.vectorDB.Pinecone(BOOKS_NAMESPACE, {
     }),
 });
 
+
+
 //#endregion
 
 //#region [ Skills ] ===================================

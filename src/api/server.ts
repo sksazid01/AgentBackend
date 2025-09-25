@@ -2,9 +2,13 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
+import dotenv from 'dotenv';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
 import BookAssistantAgent, { skillGate } from '../agents/BookAssistant.agent.js';
+
+// Load environment variables
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -215,8 +219,13 @@ app.post('/api/prompt', async (req: any, res: any) => {
 
         console.log('🧠 Processing prompt with Gemini AI:', prompt);
         
-        // Initialize Gemini AI
-        const genAI = new GoogleGenerativeAI('AIzaSyC-BH4oOoKeoTHIm5tBTGIbN6j9HlB8x80');
+        // Initialize Gemini AI with environment variable
+        const apiKey = process.env.GOOGLE_AI_API_KEY;
+        if (!apiKey) {
+            throw new Error('GOOGLE_AI_API_KEY environment variable is not set');
+        }
+        
+        const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         
         console.log('🤖 Sending prompt to Gemini...');
@@ -259,13 +268,22 @@ app.post('/api/chat', async (req: any, res: any) => {
 
         console.log('💬 Processing chat message:', message);
         
+        // Initialize OpenAI client with environment variables
+        const apiKey = process.env.SMYTHOS_API_KEY;
+        const baseURL = process.env.SMYTHOS_BASE_URL;
+        const model = process.env.SMYTHOS_MODEL;
+        
+        if (!apiKey || !baseURL || !model) {
+            throw new Error('Missing required Smythos environment variables (SMYTHOS_API_KEY, SMYTHOS_BASE_URL, SMYTHOS_MODEL)');
+        }
+        
         const openai = new OpenAI({
-            apiKey: 'sk-97851db9-6a52-4ea1-b974-100209bc96f1',
-            baseURL: 'https://llm.emb.smyth.ai/_openai/v1',
+            apiKey: apiKey,
+            baseURL: baseURL,
         });
 
         const response = await openai.chat.completions.create({
-            model: 'cmfwa1ah7ycfcjxgthiwbjwr9@dev',
+            model: model,
             messages: [{ role: 'user', content: message }],
             stream: false,
         });
@@ -276,7 +294,7 @@ app.post('/api/chat', async (req: any, res: any) => {
         res.json({
             success: true,
             response: response.choices[0].message.content,
-            model: 'cmfwa1ah7ycfcjxgthiwbjwr9@dev',
+            model: model,
             choices: response?.choices,
             usage: response?.usage,
             timestamp: new Date().toISOString()
