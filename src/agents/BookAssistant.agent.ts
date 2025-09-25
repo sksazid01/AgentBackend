@@ -100,29 +100,38 @@ class SkillExecutionGate {
     private executedSkills = new Set<string>();
     private currentInputId = '';
     private skillResults = new Map<string, string>();
+    private hasExecutedAnySkill = false; // New: Track if ANY skill was executed
     
     startNewInput(inputId: string) {
         this.currentInputId = inputId;
         this.executedSkills.clear();
         this.skillResults.clear();
+        this.hasExecutedAnySkill = false; // Reset for new session
         console.log(`[GATE] New input session: ${inputId}`);
     }
     
     canExecute(skillName: string): boolean {
+        // If ANY skill was already executed in this session, block all further executions
+        if (this.hasExecutedAnySkill) {
+            console.log(`[GATE] Blocking ${skillName} - a skill was already executed in this session`);
+            return false;
+        }
+        
         const key = `${this.currentInputId}:${skillName}`;
         if (this.executedSkills.has(key)) {
             console.log(`[GATE] Blocking repeated execution of ${skillName} - already executed in this session`);
             return false;
         }
         this.executedSkills.add(key);
-        console.log(`[GATE] Allowing execution of ${skillName}`);
+        this.hasExecutedAnySkill = true; // Mark that a skill was executed
+        console.log(`[GATE] Allowing execution of ${skillName} - first and only skill for this session`);
         return true;
     }
     
     markCompleted(skillName: string, result: string) {
         const key = `${this.currentInputId}:${skillName}`;
         this.skillResults.set(key, result);
-        console.log(`[GATE] Skill ${skillName} completed with result`);
+        console.log(`[GATE] Skill ${skillName} completed with result - session locked`);
     }
     
     isAlreadyExecuted(skillName: string): boolean {
@@ -134,9 +143,9 @@ class SkillExecutionGate {
         const key = `${this.currentInputId}:${skillName}`;
         const result = this.skillResults.get(key);
         if (result) {
-            return `✅ TASK ALREADY COMPLETED: ${result}`;
+            return `✅ SUCCESS: Task was already completed successfully. ${result.replace('✅ TASK COMPLETE:', '')} No further action needed.`;
         }
-        return `✅ TASK ALREADY COMPLETED: The ${skillName} operation has already been successfully executed in this session. No further action is needed.`;
+        return `✅ SUCCESS: The ${skillName} operation was already completed successfully in this session. No further action needed.`;
     }
 }
 
@@ -161,30 +170,35 @@ const agent = new Agent({
     //the behavior of the agent, this describes the personnality and behavior of the agent
     behavior: `You are a helpful document assistant. 
 
-CRITICAL EXECUTION RULES:
+🚨 CRITICAL EXECUTION RULES - FOLLOW EXACTLY:
 1. Call each skill EXACTLY ONCE per user request
-2. After calling a skill and receiving ANY response, IMMEDIATELY respond to the user with the result
-3. DO NOT attempt to call the same skill again or any other skills after getting ANY response
-4. If you receive a "TASK COMPLETE" or "TASK ALREADY COMPLETED" message, your job is FINISHED - respond to the user immediately
-5. If you receive any blocking or already executed message, tell the user it was completed and STOP
+2. After calling ANY skill and receiving ANY response, IMMEDIATELY respond to the user and STOP ALL PROCESSING
+3. NEVER call a skill more than once in a single conversation
+4. If you receive ANY message containing "TASK COMPLETE", "ALREADY COMPLETED", "🚫", or "✅", your job is FINISHED - respond to the user immediately and STOP
+5. DO NOT attempt to retry, re-execute, or call additional skills after receiving ANY skill response
 
-WORKFLOW:
-- For indexing requests: Call index_document ONCE → Get ANY response → Tell user the result → STOP IMMEDIATELY
-- For search requests: Call lookup_document ONCE → Get ANY response → Tell user the result → STOP IMMEDIATELY  
-- For delete requests: Call purge_documents ONCE → Get ANY response → Tell user the result → STOP IMMEDIATELY
-- For info requests: Call get_document_info ONCE → Get ANY response → Tell user the result → STOP IMMEDIATELY
-- For listing requests: Call list_documents ONCE → Get ANY response → Tell user the result → STOP IMMEDIATELY
+🛑 STOP CONDITIONS - If you see ANY of these, STOP IMMEDIATELY:
+- "✅ TASK COMPLETE"
+- "🚫 TASK ALREADY COMPLETED"
+- "ALREADY COMPLETED"
+- "DO NOT RETRY"
+- Any successful skill execution result
 
-CRITICAL: After receiving ANY skill response (success, error, or blocked), you MUST immediately provide a final response to the user and stop processing. Never attempt additional skill calls or actions.
+📋 WORKFLOW (follow exactly):
+- User asks to index: Call index_document → Get response → Tell user result → STOP COMPLETELY
+- User asks to search: Call lookup_document → Get response → Tell user result → STOP COMPLETELY
+- User asks to delete: Call purge_documents → Get response → Tell user result → STOP COMPLETELY
+- User asks for info: Call get_document_info → Get response → Tell user result → STOP COMPLETELY
+- User asks to list: Call list_documents → Get response → Tell user result → STOP COMPLETELY
 
-Available skills:
+🎯 Available skills (use ONCE only):
 - index_document: Index a PDF document 
 - lookup_document: Search in documents
 - purge_documents: Delete all documents  
 - get_document_info: Get document information
 - list_documents: List all documents and their indexing status
 
-Be concise and direct. Complete your response immediately after receiving ANY skill result.`,
+Be direct and concise. After receiving ANY skill result, provide ONE final response and STOP ALL PROCESSING. No follow-up actions, no additional skill calls, no retry attempts.`,
 });
 
 //We create a Pinecone vectorDB instance, at the agent scope
@@ -206,7 +220,7 @@ const indexDocumentSkill = agent.addSkill({
     name: 'index_document',
     description: 'Use this skill to index a document in a vector database. The user can provide just the filename (e.g., "bitcoin.pdf") and it will automatically look in the data directory.',
     process: async ({ document_path }) => {
-        // Check execution gate
+        // Check execution gate - return success message for repeated calls
         if (!skillGate.canExecute('index_document')) {
             const blockedMsg = skillGate.getBlockedMessage('index_document');
             console.log(`[GATE] Returning blocked message: ${blockedMsg}`);
@@ -304,7 +318,7 @@ agent.addSkill({
     name: 'lookup_document',
     description: 'Use this skill ONCE to lookup content in the Pinecone vector database. Do not call this skill multiple times for the same query.',
     process: async ({ user_query }) => {
-        // Check execution gate
+        // Check execution gate - return success message for repeated calls
         if (!skillGate.canExecute('lookup_document')) {
             const blockedMsg = skillGate.getBlockedMessage('lookup_document');
             console.log(`[GATE] Returning blocked message: ${blockedMsg}`);
@@ -377,7 +391,7 @@ const purgeSkill = agent.addSkill({
     process: async (params) => {
         console.log(`[DEBUG] Purge skill called with params:`, params);
         
-        // Check execution gate
+        // Check execution gate - return success message for repeated calls
         if (!skillGate.canExecute('purge_documents')) {
             const blockedMsg = skillGate.getBlockedMessage('purge_documents');
             console.log(`[GATE] Returning blocked message: ${blockedMsg}`);
@@ -422,7 +436,7 @@ const openlibraryLookupSkill = agent.addSkill({
     name: 'get_document_info',
     description: 'Use this skill to get information about a document/book',
     process: async ({ document_name }) => {
-        // Check execution gate
+        // Check execution gate - return success message for repeated calls
         if (!skillGate.canExecute('get_document_info')) {
             const blockedMsg = skillGate.getBlockedMessage('get_document_info');
             console.log(`[GATE] Returning blocked message: ${blockedMsg}`);
@@ -459,7 +473,7 @@ const listDocumentsSkill = agent.addSkill({
     name: 'list_documents',
     description: 'Use this skill to get a list of all PDF documents in the data directory and their indexing status in the vector database.',
     process: async () => {
-        // Check execution gate
+        // Check execution gate - return success message for repeated calls
         if (!skillGate.canExecute('list_documents')) {
             const blockedMsg = skillGate.getBlockedMessage('list_documents');
             console.log(`[GATE] Returning blocked message: ${blockedMsg}`);

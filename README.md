@@ -108,6 +108,35 @@ GET /health
 }
 ```
 
+### List PDF Documents
+```http
+GET /api/documents/pdfs
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "totalPdfs": 7,
+    "pdfs": [
+      {
+        "name": "bitcoin.pdf",
+        "path": "data/bitcoin.pdf", 
+        "fullPath": "/absolute/path/to/data/bitcoin.pdf"
+      },
+      {
+        "name": "IELTS question.pdf",
+        "path": "data/IELTS question.pdf",
+        "fullPath": "/absolute/path/to/data/IELTS question.pdf"
+      }
+    ],
+    "dataDirectory": "/absolute/path/to/data",
+    "timestamp": "2025-09-25T12:00:00.000Z"
+  }
+}
+```
+
 ### List Skills
 ```http
 GET /api/agent/skills
@@ -220,26 +249,31 @@ Content-Type: application/json
    curl http://localhost:5000/health
    ```
 
-2. **List Available Skills**
+2. **List Available PDF Documents**
+   ```bash
+   curl http://localhost:5000/api/documents/pdfs | jq
+   ```
+
+3. **List Available Skills**
    ```bash
    curl http://localhost:5000/api/agent/skills | jq
    ```
 
-3. **Index a Document**
+4. **Index a Document**
    ```bash
    curl -X POST http://localhost:5000/api/agent/skills/index_document \
      -H "Content-Type: application/json" \
      -d '{"document_path": "data/bitcoin.pdf"}' | jq
    ```
 
-4. **Search Documents**
+5. **Search Documents**
    ```bash
    curl -X POST http://localhost:5000/api/agent/skills/lookup_document \
      -H "Content-Type: application/json" \
      -d '{"user_query": "What is Bitcoin?"}' | jq
    ```
 
-5. **Natural Language Query**
+6. **Natural Language Query**
    ```bash
    curl -X POST http://localhost:5000/api/agent/prompt \
      -H "Content-Type: application/json" \
@@ -250,6 +284,12 @@ Content-Type: application/json
 
 ```javascript
 const API_BASE = 'http://localhost:5000';
+
+// Get list of available PDFs
+async function listPDFs() {
+  const response = await fetch(`${API_BASE}/api/documents/pdfs`);
+  return response.json();
+}
 
 // Index a document
 async function indexDocument(filePath) {
@@ -273,9 +313,15 @@ async function searchDocuments(query) {
 
 // Usage
 (async () => {
-  // Index document
-  const indexResult = await indexDocument('data/bitcoin.pdf');
-  console.log('Index Result:', indexResult);
+  // List available PDFs
+  const pdfList = await listPDFs();
+  console.log('Available PDFs:', pdfList.data.pdfs);
+  
+  // Index first available document
+  if (pdfList.data.pdfs.length > 0) {
+    const indexResult = await indexDocument(pdfList.data.pdfs[0].path);
+    console.log('Index Result:', indexResult);
+  }
   
   // Search  
   const searchResult = await searchDocuments('What is Bitcoin?');
@@ -290,6 +336,10 @@ import requests
 import json
 
 API_BASE = 'http://localhost:5000'
+
+def list_pdfs():
+    response = requests.get(f'{API_BASE}/api/documents/pdfs')
+    return response.json()
 
 def index_document(file_path):
     response = requests.post(
@@ -307,9 +357,15 @@ def search_documents(query):
 
 # Usage
 if __name__ == '__main__':
-    # Index document
-    index_result = index_document('data/bitcoin.pdf')
-    print('Index Result:', json.dumps(index_result, indent=2))
+    # List available PDFs
+    pdf_list = list_pdfs()
+    print('Available PDFs:', json.dumps(pdf_list['data']['pdfs'], indent=2))
+    
+    # Index first available document
+    if pdf_list['data']['pdfs']:
+        first_pdf = pdf_list['data']['pdfs'][0]['path']
+        index_result = index_document(first_pdf)
+        print('Index Result:', json.dumps(index_result, indent=2))
     
     # Search
     search_result = search_documents('What is Bitcoin?') 
