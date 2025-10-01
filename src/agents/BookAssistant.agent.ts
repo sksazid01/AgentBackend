@@ -440,70 +440,7 @@ openlibraryLookupSkill.in({
     },
 });
 
-//Send email skill (placeholder implementation)
-const sendEmailSkill = agent.addSkill({
-    name: 'send_email',
-    description: 'Send an email to specified recipients with subject and body content',
-    process: async ({ to, subject = 'No Subject', body = 'No content' }) => {
-        // Check execution gate - return success message for repeated calls
-        if (!skillGate.canExecute('send_email')) {
-            const blockedMsg = skillGate.getBlockedMessage('send_email');
-            console.log(`[GATE] Returning blocked message: ${blockedMsg}`);
-            return blockedMsg;
-        }
-        
-        try {
-            // This is a placeholder implementation
-            // In a real implementation, you would integrate with an email service like:
-            // - SendGrid, Mailgun, AWS SES, etc.
-            // - SMTP server
-            // - Microsoft Graph API for Outlook
-            
-            console.log(`[DEBUG] Email skill called with:`);
-            console.log(`  To: ${to}`);
-            console.log(`  Subject: ${subject}`);
-            console.log(`  Body: ${body}`);
-            
-            // Simulate email sending
-            const emailData = {
-                to: to,
-                subject: subject,
-                body: body,
-                timestamp: new Date().toISOString(),
-                status: 'simulated_sent'
-            };
-            
-            const successMsg = `✅ EMAIL SENT (SIMULATED): Email successfully sent to ${to} with subject "${subject}". This is a demonstration - no actual email was sent. To enable real email sending, integrate with an email service provider.`;
-            console.log(`[SUCCESS] ${successMsg}`);
-            skillGate.markCompleted('send_email', successMsg);
-            
-            return {
-                success: true,
-                data: emailData,
-                message: successMsg
-            };
-            
-        } catch (error) {
-            const errorMsg = `❌ Error sending email: ${error.message}`;
-            console.error(`[ERROR] ${errorMsg}`, error);
-            skillGate.markCompleted('send_email', errorMsg);
-            return errorMsg;
-        }
-    },
-});
 
-// Add input descriptions for send_email skill
-sendEmailSkill.in({
-    to: {
-        description: 'Email recipient address (required)',
-    },
-    subject: {
-        description: 'Email subject line (optional, defaults to "No Subject")',
-    },
-    body: {
-        description: 'Email body content (optional, defaults to "No content")',
-    },
-});
 
 //List all documents in data directory and show indexing status
 const listDocumentsSkill = agent.addSkill({
@@ -654,6 +591,118 @@ const listDocumentsSkill = agent.addSkill({
             skillGate.markCompleted('list_documents', errorMsg);
             return errorMsg;
         }
+    },
+});
+
+//Send email skill using external Smyth API
+const realSendEmailSkill = agent.addSkill({
+    name: 'send_email',
+    description: 'Send an email to specified recipients with subject and body content. Supports CC and BCC recipients.',
+    process: async ({ to, subject = 'No Subject', body = 'No content', cc, bcc }) => {
+        // Check execution gate - return success message for repeated calls
+        if (!skillGate.canExecute('send_email')) {
+            const blockedMsg = skillGate.getBlockedMessage('send_email');
+            console.log(`[GATE] Returning blocked message: ${blockedMsg}`);
+            return blockedMsg;
+        }
+        
+        try {
+            // Validate required field
+            if (!to || typeof to !== 'string' || to.trim() === '') {
+                const errorMsg = '❌ Email recipient (to) is required and cannot be empty';
+                console.log(`[ERROR] ${errorMsg}`);
+                skillGate.markCompleted('send_email', errorMsg);
+                return errorMsg;
+            }
+
+            // Light email validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(to.trim())) {
+                const errorMsg = `❌ Invalid email format for recipient: ${to}`;
+                console.log(`[ERROR] ${errorMsg}`);
+                skillGate.markCompleted('send_email', errorMsg);
+                return errorMsg;
+            }
+
+            // Prepare email data
+            const emailData: any = {
+                to: to.trim(),
+                subject: subject.trim() || 'No Subject',
+                body: body.trim() || 'No content'
+            };
+
+            // Add optional CC and BCC if provided
+            if (cc && typeof cc === 'string' && cc.trim() !== '') {
+                emailData.cc = cc.trim();
+            }
+            if (bcc && typeof bcc === 'string' && bcc.trim() !== '') {
+                emailData.bcc = bcc.trim();
+            }
+
+            console.log(`[DEBUG] Sending email via Smyth API...`);
+            console.log(`[DEBUG] Recipient: ${emailData.to}`);
+            console.log(`[DEBUG] Subject: ${emailData.subject}`);
+            console.log(`[DEBUG] Body length: ${emailData.body.length} characters`);
+
+            // Call the external Smyth email API
+            const apiUrl = 'https://cmfwa1ah7ycfcjxgthiwbjwr9.agent.a.smyth.ai/api/send_email';
+            
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(emailData)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                const errorMsg = `❌ Failed to send email: HTTP ${response.status} - ${errorText}`;
+                console.log(`[ERROR] ${errorMsg}`);
+                skillGate.markCompleted('send_email', errorMsg);
+                return errorMsg;
+            }
+
+            const result = await response.json();
+            console.log(`[DEBUG] Email API response:`, result);
+
+            const successMsg = `✅ EMAIL SENT SUCCESSFULLY: Email sent to ${emailData.to} with subject "${emailData.subject}". ${emailData.cc ? `CC: ${emailData.cc}` : ''} ${emailData.bcc ? `BCC: ${emailData.bcc}` : ''} The email operation is complete.`;
+            console.log(`[SUCCESS] ${successMsg}`);
+            skillGate.markCompleted('send_email', successMsg);
+            
+            return {
+                success: true,
+                message: successMsg,
+                emailData: emailData,
+                apiResponse: result,
+                timestamp: new Date().toISOString()
+            };
+            
+        } catch (error) {
+            const errorMsg = `❌ Error sending email: ${error.message}`;
+            console.error(`[ERROR] ${errorMsg}`, error);
+            skillGate.markCompleted('send_email', errorMsg);
+            return errorMsg;
+        }
+    },
+});
+
+// Add input descriptions for send_email skill
+realSendEmailSkill.in({
+    to: {
+        description: 'Email recipient address (required)',
+    },
+    subject: {
+        description: 'Email subject line (optional, defaults to "No Subject")',
+    },
+    body: {
+        description: 'Email body content (optional, defaults to "No content")',
+    },
+    cc: {
+        description: 'CC recipients (optional)',
+    },
+    bcc: {
+        description: 'BCC recipients (optional)',
     },
 });
 
