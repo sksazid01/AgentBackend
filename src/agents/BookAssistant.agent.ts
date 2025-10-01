@@ -165,40 +165,10 @@ const agent = new Agent({
 
     //here we are using a builtin model
     //note that we are not passing an apiKey because we will rely on smyth vault for the model credentials
-    model: 'gemini-2.0-flash',
+    model: Model.Groq('llama-3.1-8b-instant'),
 
     //the behavior of the agent, this describes the personnality and behavior of the agent
-    behavior: `You are a helpful document assistant. 
-
-🚨 CRITICAL EXECUTION RULES - FOLLOW EXACTLY:
-1. Call each skill EXACTLY ONCE per user request
-2. After calling ANY skill and receiving ANY response, IMMEDIATELY respond to the user and STOP ALL PROCESSING
-3. NEVER call a skill more than once in a single conversation
-4. If you receive ANY message containing "TASK COMPLETE", "ALREADY COMPLETED", "🚫", or "✅", your job is FINISHED - respond to the user immediately and STOP
-5. DO NOT attempt to retry, re-execute, or call additional skills after receiving ANY skill response
-
-🛑 STOP CONDITIONS - If you see ANY of these, STOP IMMEDIATELY:
-- "✅ TASK COMPLETE"
-- "🚫 TASK ALREADY COMPLETED"
-- "ALREADY COMPLETED"
-- "DO NOT RETRY"
-- Any successful skill execution result
-
-📋 WORKFLOW (follow exactly):
-- User asks to index: Call index_document → Get response → Tell user result → STOP COMPLETELY
-- User asks to search: Call lookup_document → Get response → Tell user result → STOP COMPLETELY
-- User asks to delete: Call purge_documents → Get response → Tell user result → STOP COMPLETELY
-- User asks for info: Call get_document_info → Get response → Tell user result → STOP COMPLETELY
-- User asks to list: Call list_documents → Get response → Tell user result → STOP COMPLETELY
-
-🎯 Available skills (use ONCE only):
-- index_document: Index a PDF document 
-- lookup_document: Search in documents
-- purge_documents: Delete all documents  
-- get_document_info: Get document information
-- list_documents: List all documents and their indexing status
-
-Be direct and concise. After receiving ANY skill result, provide ONE final response and STOP ALL PROCESSING. No follow-up actions, no additional skill calls, no retry attempts.`,
+    behavior: `You are a helpful document assistant.`
 });
 
 //We create a Pinecone vectorDB instance, at the agent scope
@@ -220,7 +190,7 @@ const pinecone = agent.vectorDB.Pinecone(BOOKS_NAMESPACE, {
 //Index a document in Pinecone vector database
 const indexDocumentSkill = agent.addSkill({
     name: 'index_document',
-    description: 'Use this skill to index a document in a vector database. The user can provide just the filename (e.g., "bitcoin.pdf") and it will automatically look in the data directory.',
+    description: 'Use this skill to index a document in a vector database. The user can provide just the filename (e.g., "bitcoin.pdf"), keyword: store documents, read documents, save pdf etc.',
     process: async ({ document_path }) => {
         // Check execution gate - return success message for repeated calls
         if (!skillGate.canExecute('index_document')) {
@@ -318,7 +288,7 @@ indexDocumentSkill.in({
 //Lookup a document in Pinecone vector database
 agent.addSkill({
     name: 'lookup_document',
-    description: 'Use this skill ONCE to lookup content in the Pinecone vector database. Do not call this skill multiple times for the same query.',
+    description: 'Use this skill to lookup content. Use this skill for read document, find information from document, extract text from document.',
     process: async ({ user_query }) => {
         // Check execution gate - return success message for repeated calls
         if (!skillGate.canExecute('lookup_document')) {
